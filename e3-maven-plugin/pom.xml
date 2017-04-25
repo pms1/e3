@@ -63,6 +63,33 @@
 					</execution>
 				</executions>
 			</plugin>
+
+			<plugin>
+				<artifactId>maven-invoker-plugin</artifactId>
+				<configuration>
+					<cloneProjectsTo>${project.build.directory}/it</cloneProjectsTo>
+					<!-- use local repository for installing -->
+					<settingsFile>${basedir}/src/it/settings.xml</settingsFile>
+					<localRepositoryPath>${project.build.directory}/local-repo</localRepositoryPath>
+					<!-- make logs directly visible -->
+					<streamLogs>true</streamLogs>
+
+					<!-- build.log is required for checking of mojo output -->
+					<noLog>false</noLog>
+
+					<postBuildHookScript>verify.groovy</postBuildHookScript>
+				</configuration>
+				<executions>
+					<execution>
+						<id>integration-test</id>
+						<goals>
+							<goal>install</goal>
+							<goal>run</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
 		</plugins>
 	</build>
 
