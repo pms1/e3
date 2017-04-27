@@ -331,6 +331,7 @@
 	</reporting>
 
 	<modules>
+		<module>e3-launcher</module>
 		<module>e3-maven-plugin</module>
 	</modules>
 

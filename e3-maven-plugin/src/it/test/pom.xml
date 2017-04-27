@@ -8,6 +8,7 @@
 
 	<modules>
 		<module>hello-world-bundle</module>
+		<module>hello-world-frameworkextension</module>
 		<module>hello-world-product</module>
 		<module>hello-world-embedded</module>
 	</modules>

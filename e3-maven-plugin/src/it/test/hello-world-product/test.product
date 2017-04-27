@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?pde version="3.5"?>
 
-<product name="Test" uid="test" application="test1.id1" version="0.0.0" useFeatures="false" includeLaunchers="true">
+<product name="Test" uid="test" application="hello-world-bundle.id1" version="0.0.0" useFeatures="false" includeLaunchers="false">
 
    <configIni use="default">
    </configIni>
@@ -33,6 +33,7 @@
       <plugin id="org.eclipse.osgi.compatibility.state" fragment="true"/>
       <plugin id="org.eclipse.osgi.services"/>
       <plugin id="hello-world-bundle"/>
+      <plugin id="hello-world-frameworkextension" fragment="true" />
    </plugins>
 
    <configurations>
