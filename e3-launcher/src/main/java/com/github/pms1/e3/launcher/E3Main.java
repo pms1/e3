@@ -39,6 +39,8 @@ public class E3Main {
 	}
 
 	public static void main(String[] args1) throws Exception {
+		int exitCode;
+
 		System.out.println("RUNNING " + Arrays.toString(args1));
 
 		Properties launcherProperties = new Properties();
@@ -168,8 +170,8 @@ public class E3Main {
 
 		System.err.println("S3");
 
-		bs.stream().filter(b -> b.file.contains("hello-world-bundle")).findFirst().get().bundle.start();
-		bs.stream().filter(b -> b.file.contains("org.eclipse.core.runtime")).findFirst().get().bundle.start();
+		if (false)
+			bs.stream().filter(b -> b.file.contains("org.eclipse.core.runtime")).findFirst().get().bundle.start();
 
 		for (Bundle b : context.getBundles()) {
 			System.err.println("STATE " + b.getSymbolicName() + " " + b.getState());
@@ -235,17 +237,16 @@ public class E3Main {
 
 			appLauncher.start(args1);
 
-			System.err.println("S4");
+			exitCode = 0;
+		} catch (Throwable t) {
+			t.printStackTrace();
+			exitCode = 1;
+		} finally {
 			framework.stop();
 			System.err.println("S4.1");
 			framework.waitForStop(0);
-			System.err.println("S5");
-		} catch (Throwable t) {
-			t.printStackTrace();
-			System.err.println("S6");
-		} finally {
 			System.err.println("S7");
-			System.exit(0);
 		}
+		System.exit(exitCode);
 	}
 }

@@ -1,0 +1,7 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: simpleconfigurator-frameworkextension
+Bundle-SymbolicName: simpleconfigurator-frameworkextension
+Bundle-Version: 0.0.0.qualifier
+Fragment-Host: system.bundle
+Bundle-RequiredExecutionEnvironment: JavaSE-1.8

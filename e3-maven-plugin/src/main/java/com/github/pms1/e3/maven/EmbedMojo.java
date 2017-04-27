@@ -1,10 +1,12 @@
 package com.github.pms1.e3.maven;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
@@ -133,6 +135,7 @@ public class EmbedMojo extends AbstractMojo {
 					Integer defaultStartLevel = null;
 					String application = null;
 					String frameworkExtensions = "";
+					URI simpleConfigurator = null;
 
 					for (Map.Entry<Object, Object> e : p.entrySet()) {
 						String key = (String) e.getKey();
@@ -153,6 +156,9 @@ public class EmbedMojo extends AbstractMojo {
 							break;
 						case "eclipse.application":
 							application = value;
+							break;
+						case "org.eclipse.equinox.simpleconfigurator.configUrl":
+							simpleConfigurator = URI.create(value);
 							break;
 						case "eclipse.p2.data.area":
 							break;
@@ -274,6 +280,64 @@ public class EmbedMojo extends AbstractMojo {
 							getLog().error("Not supported: directory: " + spec);
 						} else {
 							Files.copy(plugin, pluginsDest.resolve(m.group("file")));
+						}
+					}
+
+					System.err.println("SIMPLE " + simpleConfigurator);
+					if (simpleConfigurator != null) {
+						try (BufferedReader r = Files.newBufferedReader(
+								fs.getPath("configuration", simpleConfigurator.getSchemeSpecificPart()),
+								StandardCharsets.UTF_8)) {
+
+							for (String line = r.readLine(); line != null; line = r.readLine()) {
+								// javax.inject,1.0.0.v20091030,plugins/javax.inject_1.0.0.v20091030.jar,4,false
+
+								if (line.startsWith("#encoding=")) {
+									if (!line.equals("#encoding=UTF-8"))
+										throw new MojoExecutionException("Only UTF-8 supported");
+								} else if (line.startsWith("#version=")) {
+									if (!line.equals("#version=1"))
+										throw new MojoExecutionException("Only version 1 supported");
+								} else if (line.startsWith("#")) {
+									getLog().error("Not supported: " + line);
+								} else {
+									String[] s = line.split(",");
+									if (s[2].equals(frameworkUri.getSchemeSpecificPart()))
+										continue;
+
+									if (s.length != 5)
+										throw new MojoExecutionException("Not supported: " + line);
+									if (!s[2].startsWith("plugins/"))
+										throw new MojoExecutionException("Not supported: " + s[2]);
+
+									Path plugin = fs.getPath(s[2]);
+									if (Files.isDirectory(plugin)) {
+										getLog().error("Not supported: directory: " + line);
+										continue;
+									} else {
+										Path dest = pluginsDest.resolve(s[2].substring(8));
+										if (Files.exists(dest))
+											continue;
+										Files.copy(plugin, dest);
+									}
+
+									String spec = "reference:file:" + s[2].substring(8);
+									spec += "@" + s[3];
+									switch (s[4]) {
+									case "true":
+										spec += ":start";
+										break;
+									case "false":
+										break;
+									default:
+										throw new MojoExecutionException("Not supported: " + line);
+									}
+
+									System.err.println("SPEC " + spec);
+									launcherProperties.put("osgi.bundles",
+											launcherProperties.get("osgi.bundles") + "," + spec);
+								}
+							}
 						}
 					}
 
