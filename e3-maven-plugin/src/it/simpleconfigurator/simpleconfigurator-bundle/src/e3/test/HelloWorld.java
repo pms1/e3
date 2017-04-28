@@ -62,6 +62,14 @@ public class HelloWorld implements IApplication {
 
 			Logger.getLogger("test").warning("warning");
 
+			//
+			try {
+				System.out.println(
+						"launcher.properties stream is " + new URL("embedded:launcher.properties").openStream());
+			} catch (Throwable e) {
+				System.out.println("launcher.properties failed " + e);
+			}
+
 			return 0;
 		} catch (Throwable t) {
 			t.printStackTrace();

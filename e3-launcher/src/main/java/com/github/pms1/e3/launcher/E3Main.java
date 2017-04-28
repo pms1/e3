@@ -6,10 +6,9 @@ import java.io.InputStream;
 import java.io.Writer;
 import java.net.URL;
 import java.net.URLConnection;
-import java.net.URLStreamHandler;
-import java.net.URLStreamHandlerFactory;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +27,9 @@ import org.osgi.framework.FrameworkEvent;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.framework.launch.Framework;
 import org.osgi.framework.launch.FrameworkFactory;
+import org.osgi.service.url.AbstractURLStreamHandlerService;
+import org.osgi.service.url.URLConstants;
+import org.osgi.service.url.URLStreamHandlerService;
 
 public class E3Main {
 
@@ -48,38 +50,6 @@ public class E3Main {
 			launcherProperties.load(in);
 		}
 
-		System.out.println("PROP " + launcherProperties);
-
-		ClassLoader cl = ClassLoader.getSystemClassLoader();
-
-		if (true) {
-			URLStreamHandler fooHandler = new URLStreamHandler() {
-
-				@Override
-				protected URLConnection openConnection(URL u) throws IOException {
-					URLConnection x = cl.getResource("plugins/" + u.getPath()).openConnection();
-					System.err.println("IS " + x.getInputStream());
-					return cl.getResource("plugins/" + u.getPath()).openConnection();
-
-					// Path p = root.resolve("plugins").resolve(u.getPath());
-					//
-					// System.err.println("P=" + p);
-					//
-					// return p.toFile().toURI().toURL().openConnection();
-				}
-			};
-			URL.setURLStreamHandlerFactory(new URLStreamHandlerFactory() {
-
-				@Override
-				public URLStreamHandler createURLStreamHandler(String protocol) {
-					if (protocol.equals("foo"))
-						return fooHandler;
-					else
-						return null;
-				}
-			});
-		}
-
 		FrameworkFactory frameworkFactory = ServiceLoader.load(FrameworkFactory.class).iterator().next();
 		Map<String, String> config = new HashMap<String, String>();
 		config.put(Constants.FRAMEWORK_STORAGE_CLEAN, "true");
@@ -98,6 +68,26 @@ public class E3Main {
 		// TODO: add some config properties
 		Framework framework = frameworkFactory.newFramework(config);
 		framework.start();
+
+		{
+			Hashtable<String, String[]> properties = new Hashtable<>(1);
+			properties.put(URLConstants.URL_HANDLER_PROTOCOL, new String[] { "embedded" });
+
+			framework.getBundleContext().registerService(URLStreamHandlerService.class.getName(),
+					new AbstractURLStreamHandlerService() {
+
+						@Override
+						public URLConnection openConnection(URL u) throws IOException {
+							URL u2 = E3Main.class.getClassLoader().getResource(u.getPath());
+
+							if (u2 == null)
+								throw new IOException("Not found: " + u);
+
+							return u2.openConnection();
+						}
+
+					}, properties);
+		}
 
 		String property = framework.getBundleContext().getProperty(Constants.FRAMEWORK_SYSTEMPACKAGES);
 
@@ -148,12 +138,12 @@ public class E3Main {
 
 			System.err.println("INSTALL " + bundle);
 
-			context.installBundle("foo:" + bundle.substring(p.length()));
+			context.installBundle("embedded:plugins/" + bundle.substring(p.length()));
 		}
 
 		for (B b : bs) {
 			System.err.println("INSTALL " + b.file);
-			b.bundle = context.installBundle("foo:" + b.file);
+			b.bundle = context.installBundle("embedded:plugins/" + b.file);
 		}
 		System.err.println("INSTALLED " + bs.size());
 
@@ -229,6 +219,7 @@ public class E3Main {
 				}
 
 			};
+
 			EclipseAppLauncher appLauncher = new EclipseAppLauncher(context, false, launchDefault, log, equinoxConfig);
 			ServiceRegistration<?> appLauncherRegistration = context
 					.registerService(ApplicationLauncher.class.getName(), appLauncher, null);
