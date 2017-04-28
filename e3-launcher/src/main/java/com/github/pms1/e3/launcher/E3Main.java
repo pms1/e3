@@ -6,7 +6,10 @@ import java.io.InputStream;
 import java.io.Writer;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.LinkedList;
@@ -59,8 +62,19 @@ public class E3Main {
 		config.put("eclipse.application", launcherProperties.getProperty("eclipse.application"));
 		config.put("eclipse.consoleLog", "true");
 
-		// FIXME
-		config.put(Constants.FRAMEWORK_STORAGE, "c:/temp/temp");
+		Path storage = Files.createTempDirectory("e3");
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+			@Override
+			public void run() {
+				try {
+					Files.walk(storage).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+				} catch (IOException e) {
+					throw new RuntimeException("Failed to clean storage at " + storage, e);
+				}
+			}
+		});
+		config.put(Constants.FRAMEWORK_STORAGE, storage.toString());
+
 		// for (Object k : configIni.keySet())
 		// config.put((String) k, configIni.getProperty((String) k));
 		// config.remove("osgi.framework");
