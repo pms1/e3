@@ -160,9 +160,11 @@ public class EmbedMojo extends AbstractMojo {
 		Path path = find(p);
 
 		if (path == null) {
-			Path dest = classesDir.toPath().resolve("plugins").resolve(p.getFileName());
+			Path dest = classesDir.toPath().resolve("plugins").resolve(p.getFileName().toString());
 			if (Files.exists(dest))
 				throw new Error("Duplicate: " + dest);
+			if (!Files.isDirectory(dest.getParent()))
+				Files.createDirectories(dest.getParent());
 			Files.copy(p, dest);
 			register(dest);
 			path = dest;
@@ -249,6 +251,10 @@ public class EmbedMojo extends AbstractMojo {
 				for (Path p : Files.walk(classesDir.toPath()).filter(Files::isRegularFile).collect(Collectors.toList()))
 					register(p);
 
+			Set<Integer> defaultStartLevels = new HashSet<>();
+			Set<String> applications = new HashSet<>();
+			String framework0 = null;
+
 			for (Artifact a : directDependencies) {
 
 				try (FileSystem fs = FileSystems.newFileSystem(a.getFile().toPath(), null)) {
@@ -305,84 +311,85 @@ public class EmbedMojo extends AbstractMojo {
 
 					if (defaultStartLevel == null)
 						throw new MojoExecutionException("Missing config.ini: 'osgi.bundles.defaultStartLevel'");
+					defaultStartLevels.add(defaultStartLevel);
 
 					if (application == null)
 						throw new MojoExecutionException("Missing config.ini: 'eclipse.application'");
-
-					Properties launcherProperties = new Properties();
-					launcherProperties.put("osgi.bundles.defaultStartLevel", defaultStartLevel.toString());
-					launcherProperties.put("eclipse.application", application);
+					applications.add(application);
 
 					URI frameworkUri = URI.create(framework);
 
-					if (!frameworkUri.getScheme().equals("file"))
-						throw new MojoExecutionException(
-								"Framework URI must have \"file\" scheme: '" + frameworkUri + "'");
+					if (framework0 == null) {
+						framework0 = framework;
 
-					Manifest manifest = null;
+						if (!frameworkUri.getScheme().equals("file"))
+							throw new MojoExecutionException(
+									"Framework URI must have \"file\" scheme: '" + frameworkUri + "'");
 
-					Path p1 = fs.getPath(frameworkUri.getSchemeSpecificPart());
-					try (InputStream in = Files.newInputStream(p1); ZipInputStream zis = new ZipInputStream(in)) {
-						ZipEntry entry;
-						while ((entry = zis.getNextEntry()) != null) {
-							String name = entry.getName();
-							if (name.equals("META-INF/MANIFEST.MF")) {
-								if (manifest != null)
-									throw new MojoExecutionException("Duplicate manifest in " + p1);
-								manifest = new Manifest(zis);
-							} else if (entry.isDirectory()) {
-								continue;
-							} else if (name.matches("META-INF/[^/]+[.]SF")) {
-								// remove signature information as it
-								// becomes
-								// invalid by re-packaging
-								continue;
-							} else if (!entry.isDirectory()) {
-								Path path = classesDir.toPath().resolve(entry.getName());
-								Files.createDirectories(path.getParent());
-								Files.copy(zis, path);
+						Manifest manifest = null;
+
+						Path p1 = fs.getPath(frameworkUri.getSchemeSpecificPart());
+						try (InputStream in = Files.newInputStream(p1); ZipInputStream zis = new ZipInputStream(in)) {
+							ZipEntry entry;
+							while ((entry = zis.getNextEntry()) != null) {
+								String name = entry.getName();
+								if (name.equals("META-INF/MANIFEST.MF")) {
+									if (manifest != null)
+										throw new MojoExecutionException("Duplicate manifest in " + p1);
+									manifest = new Manifest(zis);
+								} else if (entry.isDirectory()) {
+									continue;
+								} else if (name.matches("META-INF/[^/]+[.]SF")) {
+									// remove signature information as it
+									// becomes
+									// invalid by re-packaging
+									continue;
+								} else if (!entry.isDirectory()) {
+									Path path = classesDir.toPath().resolve(entry.getName());
+									Files.createDirectories(path.getParent());
+									Files.copy(zis, path);
+								}
 							}
 						}
-					}
 
-					manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, E3Main.class.getName());
+						manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, E3Main.class.getName());
 
-					// remove signature information as it becomes invalid by
-					// re-packaging
-					manifest.getEntries().clear();
+						// remove signature information as it becomes invalid by
+						// re-packaging
+						manifest.getEntries().clear();
 
-					// add launcher
-					Artifact launcher = resolveDependency(repositorySystem.createArtifact("com.github.pms1.e3",
-							"e3-launcher", mojoExecution.getVersion(), "jar"));
-					try (InputStream in = Files.newInputStream(launcher.getFile().toPath());
-							ZipInputStream zis = new ZipInputStream(in)) {
-						ZipEntry entry;
-						while ((entry = zis.getNextEntry()) != null) {
-							String name = entry.getName();
-							if (name.equals("META-INF/MANIFEST.MF")) {
-								continue;
-							} else if (entry.isDirectory()) {
-								continue;
-							} else if (name.matches("META-INF/[^/]+[.]SF")) {
-								// remove signature information as it
-								// becomes
-								// invalid by re-packaging
-								continue;
-							} else if (!entry.isDirectory()) {
-								Path path = classesDir.toPath().resolve(entry.getName());
-								Files.createDirectories(path.getParent());
-								Files.copy(zis, path);
+						// add launcher
+						Artifact launcher = resolveDependency(repositorySystem.createArtifact("com.github.pms1.e3",
+								"e3-launcher", mojoExecution.getVersion(), "jar"));
+						try (InputStream in = Files.newInputStream(launcher.getFile().toPath());
+								ZipInputStream zis = new ZipInputStream(in)) {
+							ZipEntry entry;
+							while ((entry = zis.getNextEntry()) != null) {
+								String name = entry.getName();
+								if (name.equals("META-INF/MANIFEST.MF")) {
+									continue;
+								} else if (entry.isDirectory()) {
+									continue;
+								} else if (name.matches("META-INF/[^/]+[.]SF")) {
+									// remove signature information as it
+									// becomes
+									// invalid by re-packaging
+									continue;
+								} else if (!entry.isDirectory()) {
+									Path path = classesDir.toPath().resolve(entry.getName());
+									Files.createDirectories(path.getParent());
+									Files.copy(zis, path);
+								}
 							}
 						}
-					}
 
-					Files.createDirectories(manifestPath.toPath().getParent());
-					try (OutputStream out = Files.newOutputStream(manifestPath.toPath())) {
-						manifest.write(out);
+						Files.createDirectories(manifestPath.toPath().getParent());
+						try (OutputStream out = Files.newOutputStream(manifestPath.toPath())) {
+							manifest.write(out);
+						}
+					} else if (!framework0.equals(framework)) {
+						throw new Error();
 					}
-
-					Path pluginsDest = classesDir.toPath().resolve("plugins");
-					Files.createDirectory(pluginsDest);
 
 					for (String spec : bundles.split(",", -1)) {
 						Matcher m = Pattern.compile("reference:file:(?<file>.+)@(?<runLevel>\\d)+(?<start>:start)?")
@@ -460,19 +467,29 @@ public class EmbedMojo extends AbstractMojo {
 							}
 						}
 					}
-
-					launcherProperties.put("osgi.bundles", this.bundles.stream().map(bs -> {
-						String s = bs.relPath + "@" + bs.startLevel;
-						if (bs.start)
-							s += ":start";
-						return s;
-					}).collect(Collectors.joining(",")));
-
-					try (OutputStream out = Files.newOutputStream(classesDir.toPath().resolve("launcher.properties"))) {
-						launcherProperties.store(out, "");
-					}
-
 				}
+
+				Properties launcherProperties = new Properties();
+				if (defaultStartLevels.size() != 1)
+					throw new Error();
+				launcherProperties.put("osgi.bundles.defaultStartLevel",
+						defaultStartLevels.iterator().next().toString());
+
+				if (applications.size() != 1)
+					throw new Error();
+				launcherProperties.put("eclipse.application", applications.iterator().next());
+
+				launcherProperties.put("osgi.bundles", this.bundles.stream().map(bs -> {
+					String s = bs.relPath + "@" + bs.startLevel;
+					if (bs.start)
+						s += ":start";
+					return s;
+				}).collect(Collectors.joining(",")));
+
+				try (OutputStream out = Files.newOutputStream(classesDir.toPath().resolve("launcher.properties"))) {
+					launcherProperties.store(out, "");
+				}
+
 			}
 		} catch (DependencyGraphBuilderException | IOException | MavenExecutionException e) {
 			throw new MojoExecutionException("failed", e);
