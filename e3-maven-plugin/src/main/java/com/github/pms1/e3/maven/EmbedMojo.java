@@ -6,14 +6,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +28,7 @@ import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -86,6 +92,124 @@ public class EmbedMojo extends AbstractMojo {
 	@Component
 	private ResolutionErrorHandler resolutionErrorHandler;
 
+	MessageDigest digest;
+	ByteBuffer digestBuffer = ByteBuffer.allocateDirect(32 * 1024);
+	{
+		try {
+			digest = MessageDigest.getInstance("SHA1");
+		} catch (NoSuchAlgorithmException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	synchronized byte[] digest(Path p) {
+		digest.reset();
+
+		try {
+			FileChannel fileChannel = FileChannel.open(p);
+
+			for (;;) {
+				int read = fileChannel.read(digestBuffer);
+				if (read == -1)
+					break;
+
+				digestBuffer.flip();
+				digest.update(digestBuffer);
+				digestBuffer.clear();
+			}
+		} catch (IOException e) {
+			throw new RuntimeException("Failed to digest " + p, e);
+		}
+		return digest.digest();
+	}
+
+	private static class FileInfo {
+		Path p;
+		long size;
+		byte[] sha1sum;
+	}
+
+	private List<FileInfo> files = new ArrayList<>();
+
+	private void register(Path p) throws IOException {
+		if (files.stream().anyMatch(p1 -> p1.p.equals(p)))
+			throw new IllegalArgumentException();
+		FileInfo fi = new FileInfo();
+		fi.p = p;
+		fi.size = Files.size(p);
+		files.add(fi);
+	}
+
+	private Path find(Path p) throws IOException {
+		long size = Files.size(p);
+
+		List<FileInfo> sizeMatch = files.stream().filter(p1 -> p1.size == size).collect(Collectors.toList());
+		if (sizeMatch.isEmpty())
+			return null;
+
+		byte[] file = digest(p);
+
+		return sizeMatch.stream().filter(p1 -> {
+			if (p1.sha1sum == null)
+				p1.sha1sum = digest(p1.p);
+			return Arrays.equals(p1.sha1sum, file);
+		}).findAny().orElse(null).p;
+	}
+
+	private void addBundle(Path p, int startLevel, boolean start) throws IOException {
+		Path path = find(p);
+
+		if (path == null) {
+			Path dest = classesDir.toPath().resolve("plugins").resolve(p.getFileName());
+			if (Files.exists(dest))
+				throw new Error("Duplicate: " + dest);
+			Files.copy(p, dest);
+			register(dest);
+			path = dest;
+		}
+
+		URI relPath = URI.create(classesDir.toPath().relativize(path).toString().replace(File.separatorChar, '/'));
+
+		List<BundleSpec> existing = bundles.stream().filter(bs -> bs.relPath.equals(relPath))
+				.collect(Collectors.toList());
+
+		switch (existing.size()) {
+		case 0:
+			BundleSpec bs = new BundleSpec();
+			bs.relPath = relPath;
+			bs.startLevel = startLevel;
+			bs.start = start;
+			bundles.add(bs);
+			break;
+		case 1:
+			bs = existing.get(0);
+			if (bs.start != start)
+				throw new Error("conflict");
+			if (bs.startLevel != startLevel)
+				throw new Error("conflict");
+			break;
+		default:
+			throw new Error("duplicate");
+		}
+	}
+
+	List<BundleSpec> bundles = new ArrayList<>();
+
+	public static void main(String[] args) throws URISyntaxException {
+		Path p = Paths.get("c:/temp/");
+		Path p1 = Paths.get("c:/temp/a/b");
+		Path r = p.relativize(p1);
+		System.err.println("r " + r);
+		System.err.println(r.toUri());
+		System.err.println(new URI(r.toString()));
+	}
+
+	static class BundleSpec {
+		URI relPath;
+		int startLevel;
+		boolean start;
+	}
+
 	public void execute() throws MojoExecutionException, MojoFailureException {
 
 		System.err.println("EXECUTING " + this);
@@ -120,6 +244,10 @@ public class EmbedMojo extends AbstractMojo {
 					return true;
 				}
 			});
+
+			if (Files.isDirectory(classesDir.toPath()))
+				for (Path p : Files.walk(classesDir.toPath()).filter(Files::isRegularFile).collect(Collectors.toList()))
+					register(p);
 
 			for (Artifact a : directDependencies) {
 
@@ -182,10 +310,8 @@ public class EmbedMojo extends AbstractMojo {
 						throw new MojoExecutionException("Missing config.ini: 'eclipse.application'");
 
 					Properties launcherProperties = new Properties();
-					launcherProperties.put("osgi.bundles", bundles);
 					launcherProperties.put("osgi.bundles.defaultStartLevel", defaultStartLevel.toString());
 					launcherProperties.put("eclipse.application", application);
-					launcherProperties.put("osgi.framework.extensions", frameworkExtensions);
 
 					URI frameworkUri = URI.create(framework);
 
@@ -207,7 +333,8 @@ public class EmbedMojo extends AbstractMojo {
 							} else if (entry.isDirectory()) {
 								continue;
 							} else if (name.matches("META-INF/[^/]+[.]SF")) {
-								// remove signature information as it becomes
+								// remove signature information as it
+								// becomes
 								// invalid by re-packaging
 								continue;
 							} else if (!entry.isDirectory()) {
@@ -237,7 +364,8 @@ public class EmbedMojo extends AbstractMojo {
 							} else if (entry.isDirectory()) {
 								continue;
 							} else if (name.matches("META-INF/[^/]+[.]SF")) {
-								// remove signature information as it becomes
+								// remove signature information as it
+								// becomes
 								// invalid by re-packaging
 								continue;
 							} else if (!entry.isDirectory()) {
@@ -266,7 +394,7 @@ public class EmbedMojo extends AbstractMojo {
 						if (Files.isDirectory(plugin)) {
 							getLog().error("Not supported: directory: " + spec);
 						} else {
-							Files.copy(plugin, pluginsDest.resolve(m.group("file")));
+							addBundle(plugin, Integer.valueOf(m.group("runLevel")), m.group("start") != null);
 						}
 					}
 
@@ -279,11 +407,10 @@ public class EmbedMojo extends AbstractMojo {
 						if (Files.isDirectory(plugin)) {
 							getLog().error("Not supported: directory: " + spec);
 						} else {
-							Files.copy(plugin, pluginsDest.resolve(m.group("file")));
+							addBundle(plugin, 0, false);
 						}
 					}
 
-					System.err.println("SIMPLE " + simpleConfigurator);
 					if (simpleConfigurator != null) {
 						try (BufferedReader r = Files.newBufferedReader(
 								fs.getPath("configuration", simpleConfigurator.getSchemeSpecificPart()),
@@ -315,44 +442,34 @@ public class EmbedMojo extends AbstractMojo {
 										getLog().error("Not supported: directory: " + line);
 										continue;
 									} else {
-										Path dest = pluginsDest.resolve(s[2].substring(8));
-										if (Files.exists(dest))
-											continue;
-										Files.copy(plugin, dest);
-									}
+										boolean start;
+										switch (s[4]) {
+										case "true":
+											start = true;
+											break;
+										case "false":
+											start = false;
+											break;
+										default:
+											throw new MojoExecutionException("Not supported: " + line);
+										}
 
-									String spec = "reference:file:" + s[2].substring(8);
-									spec += "@" + s[3];
-									switch (s[4]) {
-									case "true":
-										spec += ":start";
-										break;
-									case "false":
-										break;
-									default:
-										throw new MojoExecutionException("Not supported: " + line);
+										addBundle(plugin, Integer.valueOf(s[3]), start);
 									}
-
-									System.err.println("SPEC " + spec);
-									launcherProperties.put("osgi.bundles",
-											launcherProperties.get("osgi.bundles") + "," + spec);
 								}
 							}
 						}
 					}
 
+					launcherProperties.put("osgi.bundles", this.bundles.stream().map(bs -> {
+						String s = bs.relPath + "@" + bs.startLevel;
+						if (bs.start)
+							s += ":start";
+						return s;
+					}).collect(Collectors.joining(",")));
+
 					try (OutputStream out = Files.newOutputStream(classesDir.toPath().resolve("launcher.properties"))) {
 						launcherProperties.store(out, "");
-					}
-
-					if (false) {
-						Files.walkFileTree(fs.getPath("plugins"), new SimpleFileVisitor<Path>() {
-							@Override
-							public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-								System.err.println("V " + file);
-								return super.visitFile(file, attrs);
-							}
-						});
 					}
 
 				}

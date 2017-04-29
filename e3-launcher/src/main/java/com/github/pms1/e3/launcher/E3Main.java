@@ -107,8 +107,6 @@ public class E3Main {
 
 		System.err.println("X " + property);
 
-		int maxStartLevel = -1;
-
 		List<B> bs = new LinkedList<>();
 
 		for (String bundle : launcherProperties.getProperty("osgi.bundles").split(",", -1)) {
@@ -118,12 +116,9 @@ public class E3Main {
 			if (x == -1)
 				throw new Error();
 
-			String ref = bundle.substring(0, x);
-			String p = "reference:file:";
-			if (!ref.startsWith(p))
-				throw new Error();
+			// FIXME: use RE
 
-			b.file = ref.substring(p.length());
+			b.file = bundle.substring(0, x);
 
 			String rest = bundle.substring(x + 1);
 			if (rest.endsWith(":start")) {
@@ -131,37 +126,23 @@ public class E3Main {
 				rest = rest.substring(0, rest.length() - 6);
 			}
 			b.startLevel = Integer.valueOf(rest);
-			maxStartLevel = Math.max(b.startLevel, maxStartLevel);
 
-			if (!b.file.endsWith(".jar")) {
-				System.err.println("SKIP " + b.file);
-				continue;
-			}
 			bs.add(b);
-
 		}
 
 		System.err.println("S1");
 		BundleContext context = framework.getBundleContext();
 		System.err.println("S1.1");
-		for (String bundle : launcherProperties.getProperty("osgi.framework.extensions").split(",", -1)) {
-
-			String p = "reference:file:";
-			if (!bundle.startsWith(p))
-				throw new Error();
-
-			System.err.println("INSTALL " + bundle);
-
-			context.installBundle("embedded:plugins/" + bundle.substring(p.length()));
-		}
 
 		for (B b : bs) {
 			System.err.println("INSTALL " + b.file);
-			b.bundle = context.installBundle("embedded:plugins/" + b.file);
+			b.bundle = context.installBundle("embedded:" + b.file);
 		}
+
 		System.err.println("INSTALLED " + bs.size());
 
-		for (int sl = 0; sl != maxStartLevel + 1; ++sl) {
+		for (int sl = -1; sl <= Integer
+				.valueOf(launcherProperties.getProperty("osgi.bundles.defaultStartLevel")); ++sl) {
 			for (B b : bs) {
 				if (b.startLevel != sl)
 					continue;
@@ -173,9 +154,6 @@ public class E3Main {
 		}
 
 		System.err.println("S3");
-
-		if (false)
-			bs.stream().filter(b -> b.file.contains("org.eclipse.core.runtime")).findFirst().get().bundle.start();
 
 		for (Bundle b : context.getBundles()) {
 			System.err.println("STATE " + b.getSymbolicName() + " " + b.getState());
