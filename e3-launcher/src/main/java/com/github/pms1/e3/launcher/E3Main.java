@@ -141,7 +141,7 @@ public class E3Main {
 
 		System.err.println("INSTALLED " + bs.size());
 
-		for (int sl = -1; sl <= Integer
+		for (int sl = 0; sl <= Integer
 				.valueOf(launcherProperties.getProperty("osgi.bundles.defaultStartLevel")); ++sl) {
 			for (B b : bs) {
 				if (b.startLevel != sl)

@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.jar.Attributes;
@@ -156,7 +157,7 @@ public class EmbedMojo extends AbstractMojo {
 		}).findAny().orElse(null).p;
 	}
 
-	private void addBundle(Path p, int startLevel, boolean start) throws IOException {
+	private void addBundle(Path p, Integer startLevel, Boolean start) throws IOException {
 		Path path = find(p);
 
 		if (path == null) {
@@ -185,10 +186,10 @@ public class EmbedMojo extends AbstractMojo {
 			break;
 		case 1:
 			bs = existing.get(0);
-			if (bs.start != start)
+			if (bs.start != null && !Objects.equals(bs.start, start))
 				throw new Error("conflict");
-			if (bs.startLevel != startLevel)
-				throw new Error("conflict");
+			if (bs.startLevel != null && !Objects.equals(bs.startLevel, startLevel))
+				throw new Error("startLevel conflict for " + bs.relPath + ": " + bs.startLevel + " " + startLevel);
 			break;
 		default:
 			throw new Error("duplicate");
@@ -208,8 +209,8 @@ public class EmbedMojo extends AbstractMojo {
 
 	static class BundleSpec {
 		URI relPath;
-		int startLevel;
-		boolean start;
+		Integer startLevel;
+		Boolean start;
 	}
 
 	public void execute() throws MojoExecutionException, MojoFailureException {
@@ -414,7 +415,7 @@ public class EmbedMojo extends AbstractMojo {
 						if (Files.isDirectory(plugin)) {
 							getLog().error("Not supported: directory: " + spec);
 						} else {
-							addBundle(plugin, 0, false);
+							addBundle(plugin, null, null);
 						}
 					}
 
@@ -480,8 +481,8 @@ public class EmbedMojo extends AbstractMojo {
 				launcherProperties.put("eclipse.application", applications.iterator().next());
 
 				launcherProperties.put("osgi.bundles", this.bundles.stream().map(bs -> {
-					String s = bs.relPath + "@" + bs.startLevel;
-					if (bs.start)
+					String s = bs.relPath + "@" + (bs.startLevel != null ? bs.startLevel : "0");
+					if (bs.start != null && bs.start)
 						s += ":start";
 					return s;
 				}).collect(Collectors.joining(",")));
