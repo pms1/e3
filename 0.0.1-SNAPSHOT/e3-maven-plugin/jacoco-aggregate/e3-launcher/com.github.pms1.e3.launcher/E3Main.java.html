@@ -107,152 +107,130 @@ import org.osgi.service.url.URLStreamHandlerService;
 
 <span class="nc" id="L108">		System.err.println(&quot;X &quot; + property);</span>
 
-<span class="nc" id="L110">		int maxStartLevel = -1;</span>
+<span class="nc" id="L110">		List&lt;B&gt; bs = new LinkedList&lt;&gt;();</span>
 
-<span class="nc" id="L112">		List&lt;B&gt; bs = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">		for (String bundle : launcherProperties.getProperty(&quot;osgi.bundles&quot;).split(&quot;,&quot;, -1)) {</span>
 
-<span class="nc bnc" id="L114" title="All 2 branches missed.">		for (String bundle : launcherProperties.getProperty(&quot;osgi.bundles&quot;).split(&quot;,&quot;, -1)) {</span>
+<span class="nc" id="L114">			B b = new B();</span>
+<span class="nc" id="L115">			int x = bundle.indexOf(&quot;@&quot;);</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">			if (x == -1)</span>
+<span class="nc" id="L117">				throw new Error();</span>
 
-<span class="nc" id="L116">			B b = new B();</span>
-<span class="nc" id="L117">			int x = bundle.indexOf(&quot;@&quot;);</span>
-<span class="nc bnc" id="L118" title="All 2 branches missed.">			if (x == -1)</span>
-<span class="nc" id="L119">				throw new Error();</span>
+			// FIXME: use RE
 
-<span class="nc" id="L121">			String ref = bundle.substring(0, x);</span>
-<span class="nc" id="L122">			String p = &quot;reference:file:&quot;;</span>
-<span class="nc bnc" id="L123" title="All 2 branches missed.">			if (!ref.startsWith(p))</span>
-<span class="nc" id="L124">				throw new Error();</span>
+<span class="nc" id="L121">			b.file = bundle.substring(0, x);</span>
 
-<span class="nc" id="L126">			b.file = ref.substring(p.length());</span>
-
-<span class="nc" id="L128">			String rest = bundle.substring(x + 1);</span>
-<span class="nc bnc" id="L129" title="All 2 branches missed.">			if (rest.endsWith(&quot;:start&quot;)) {</span>
-<span class="nc" id="L130">				b.autostart = true;</span>
-<span class="nc" id="L131">				rest = rest.substring(0, rest.length() - 6);</span>
+<span class="nc" id="L123">			String rest = bundle.substring(x + 1);</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">			if (rest.endsWith(&quot;:start&quot;)) {</span>
+<span class="nc" id="L125">				b.autostart = true;</span>
+<span class="nc" id="L126">				rest = rest.substring(0, rest.length() - 6);</span>
 			}
-<span class="nc" id="L133">			b.startLevel = Integer.valueOf(rest);</span>
-<span class="nc" id="L134">			maxStartLevel = Math.max(b.startLevel, maxStartLevel);</span>
+<span class="nc" id="L128">			b.startLevel = Integer.valueOf(rest);</span>
 
-<span class="nc bnc" id="L136" title="All 2 branches missed.">			if (!b.file.endsWith(&quot;.jar&quot;)) {</span>
-<span class="nc" id="L137">				System.err.println(&quot;SKIP &quot; + b.file);</span>
-<span class="nc" id="L138">				continue;</span>
-			}
-<span class="nc" id="L140">			bs.add(b);</span>
-
+<span class="nc" id="L130">			bs.add(b);</span>
 		}
 
-<span class="nc" id="L144">		System.err.println(&quot;S1&quot;);</span>
-<span class="nc" id="L145">		BundleContext context = framework.getBundleContext();</span>
-<span class="nc" id="L146">		System.err.println(&quot;S1.1&quot;);</span>
-<span class="nc bnc" id="L147" title="All 2 branches missed.">		for (String bundle : launcherProperties.getProperty(&quot;osgi.framework.extensions&quot;).split(&quot;,&quot;, -1)) {</span>
+<span class="nc" id="L133">		System.err.println(&quot;S1&quot;);</span>
+<span class="nc" id="L134">		BundleContext context = framework.getBundleContext();</span>
+<span class="nc" id="L135">		System.err.println(&quot;S1.1&quot;);</span>
 
-<span class="nc" id="L149">			String p = &quot;reference:file:&quot;;</span>
-<span class="nc bnc" id="L150" title="All 2 branches missed.">			if (!bundle.startsWith(p))</span>
-<span class="nc" id="L151">				throw new Error();</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">		for (B b : bs) {</span>
+<span class="nc" id="L138">			System.err.println(&quot;INSTALL &quot; + b.file);</span>
+<span class="nc" id="L139">			b.bundle = context.installBundle(&quot;embedded:&quot; + b.file);</span>
+<span class="nc" id="L140">		}</span>
 
-<span class="nc" id="L153">			System.err.println(&quot;INSTALL &quot; + bundle);</span>
+<span class="nc" id="L142">		System.err.println(&quot;INSTALLED &quot; + bs.size());</span>
 
-<span class="nc" id="L155">			context.installBundle(&quot;embedded:plugins/&quot; + bundle.substring(p.length()));</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">		for (int sl = 0; sl &lt;= Integer</span>
+<span class="nc" id="L145">				.valueOf(launcherProperties.getProperty(&quot;osgi.bundles.defaultStartLevel&quot;)); ++sl) {</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">			for (B b : bs) {</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">				if (b.startLevel != sl)</span>
+<span class="nc" id="L148">					continue;</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">				if (!b.autostart)</span>
+<span class="nc" id="L150">					continue;</span>
+<span class="nc" id="L151">				System.err.println(&quot;START &quot; + sl + &quot; &quot; + b.bundle.getSymbolicName());</span>
+<span class="nc" id="L152">				b.bundle.start();</span>
+<span class="nc" id="L153">			}</span>
 		}
 
-<span class="nc bnc" id="L158" title="All 2 branches missed.">		for (B b : bs) {</span>
-<span class="nc" id="L159">			System.err.println(&quot;INSTALL &quot; + b.file);</span>
-<span class="nc" id="L160">			b.bundle = context.installBundle(&quot;embedded:plugins/&quot; + b.file);</span>
-<span class="nc" id="L161">		}</span>
-<span class="nc" id="L162">		System.err.println(&quot;INSTALLED &quot; + bs.size());</span>
+<span class="nc" id="L156">		System.err.println(&quot;S3&quot;);</span>
 
-<span class="nc bnc" id="L164" title="All 2 branches missed.">		for (int sl = 0; sl != maxStartLevel + 1; ++sl) {</span>
-<span class="nc bnc" id="L165" title="All 2 branches missed.">			for (B b : bs) {</span>
-<span class="nc bnc" id="L166" title="All 2 branches missed.">				if (b.startLevel != sl)</span>
-<span class="nc" id="L167">					continue;</span>
-<span class="nc bnc" id="L168" title="All 2 branches missed.">				if (!b.autostart)</span>
-<span class="nc" id="L169">					continue;</span>
-<span class="nc" id="L170">				System.err.println(&quot;START &quot; + sl + &quot; &quot; + b.bundle.getSymbolicName());</span>
-<span class="nc" id="L171">				b.bundle.start();</span>
-<span class="nc" id="L172">			}</span>
-		}
-
-<span class="nc" id="L175">		System.err.println(&quot;S3&quot;);</span>
-
-		if (false)
-<span class="nc" id="L178">			bs.stream().filter(b -&gt; b.file.contains(&quot;org.eclipse.core.runtime&quot;)).findFirst().get().bundle.start();</span>
-
-<span class="nc bnc" id="L180" title="All 2 branches missed.">		for (Bundle b : context.getBundles()) {</span>
-<span class="nc" id="L181">			System.err.println(&quot;STATE &quot; + b.getSymbolicName() + &quot; &quot; + b.getState());</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">		for (Bundle b : context.getBundles()) {</span>
+<span class="nc" id="L159">			System.err.println(&quot;STATE &quot; + b.getSymbolicName() + &quot; &quot; + b.getState());</span>
 		}
 		try {
 
-<span class="nc" id="L185">			boolean launchDefault = true;</span>
-<span class="nc" id="L186">			EquinoxConfiguration equinoxConfig = null;</span>
-<span class="nc" id="L187">			FrameworkLog log = new FrameworkLog() {</span>
+<span class="nc" id="L163">			boolean launchDefault = true;</span>
+<span class="nc" id="L164">			EquinoxConfiguration equinoxConfig = null;</span>
+<span class="nc" id="L165">			FrameworkLog log = new FrameworkLog() {</span>
 
 				@Override
 				public void log(FrameworkEvent frameworkEvent) {
-<span class="nc" id="L191">					System.err.println(&quot;LOG &quot; + frameworkEvent);</span>
-<span class="nc" id="L192">				}</span>
+<span class="nc" id="L169">					System.err.println(&quot;LOG &quot; + frameworkEvent);</span>
+<span class="nc" id="L170">				}</span>
 
 				@Override
 				public void log(FrameworkLogEntry logEntry) {
-<span class="nc" id="L196">					System.err.println(&quot;LOG &quot; + logEntry);</span>
+<span class="nc" id="L174">					System.err.println(&quot;LOG &quot; + logEntry);</span>
 
-<span class="nc" id="L198">				}</span>
+<span class="nc" id="L176">				}</span>
 
 				@Override
 				public void setWriter(Writer newWriter, boolean append) {
-<span class="nc" id="L202">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L180">					new Throwable().printStackTrace();</span>
 					// TODO Auto-generated method stub
 
-<span class="nc" id="L205">				}</span>
+<span class="nc" id="L183">				}</span>
 
 				@Override
 				public void setFile(File newFile, boolean append) throws IOException {
 					// TODO Auto-generated method stub
-<span class="nc" id="L210">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L188">					new Throwable().printStackTrace();</span>
 
-<span class="nc" id="L212">				}</span>
+<span class="nc" id="L190">				}</span>
 
 				@Override
 				public File getFile() {
-<span class="nc" id="L216">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L194">					new Throwable().printStackTrace();</span>
 					// TODO Auto-generated method stub
-<span class="nc" id="L218">					return null;</span>
+<span class="nc" id="L196">					return null;</span>
 				}
 
 				@Override
 				public void setConsoleLog(boolean consoleLog) {
-<span class="nc" id="L223">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L201">					new Throwable().printStackTrace();</span>
 					// TODO Auto-generated method stub
 
-<span class="nc" id="L226">				}</span>
+<span class="nc" id="L204">				}</span>
 
 				@Override
 				public void close() {
-<span class="nc" id="L230">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L208">					new Throwable().printStackTrace();</span>
 					// TODO Auto-generated method stub
 
-<span class="nc" id="L233">				}</span>
+<span class="nc" id="L211">				}</span>
 
 			};
 
-<span class="nc" id="L237">			EclipseAppLauncher appLauncher = new EclipseAppLauncher(context, false, launchDefault, log, equinoxConfig);</span>
-<span class="nc" id="L238">			ServiceRegistration&lt;?&gt; appLauncherRegistration = context</span>
-<span class="nc" id="L239">					.registerService(ApplicationLauncher.class.getName(), appLauncher, null);</span>
+<span class="nc" id="L215">			EclipseAppLauncher appLauncher = new EclipseAppLauncher(context, false, launchDefault, log, equinoxConfig);</span>
+<span class="nc" id="L216">			ServiceRegistration&lt;?&gt; appLauncherRegistration = context</span>
+<span class="nc" id="L217">					.registerService(ApplicationLauncher.class.getName(), appLauncher, null);</span>
 
-<span class="nc" id="L241">			System.err.println(&quot;S3&quot;);</span>
+<span class="nc" id="L219">			System.err.println(&quot;S3&quot;);</span>
 
-<span class="nc" id="L243">			appLauncher.start(args1);</span>
+<span class="nc" id="L221">			appLauncher.start(args1);</span>
 
-<span class="nc" id="L245">			exitCode = 0;</span>
-<span class="nc" id="L246">		} catch (Throwable t) {</span>
-<span class="nc" id="L247">			t.printStackTrace();</span>
-<span class="nc" id="L248">			exitCode = 1;</span>
+<span class="nc" id="L223">			exitCode = 0;</span>
+<span class="nc" id="L224">		} catch (Throwable t) {</span>
+<span class="nc" id="L225">			t.printStackTrace();</span>
+<span class="nc" id="L226">			exitCode = 1;</span>
 		} finally {
-<span class="nc" id="L250">			framework.stop();</span>
-<span class="nc" id="L251">			System.err.println(&quot;S4.1&quot;);</span>
-<span class="nc" id="L252">			framework.waitForStop(0);</span>
-<span class="nc" id="L253">			System.err.println(&quot;S7&quot;);</span>
-<span class="nc" id="L254">		}</span>
-<span class="nc" id="L255">		System.exit(exitCode);</span>
-<span class="nc" id="L256">	}</span>
+<span class="nc" id="L228">			framework.stop();</span>
+<span class="nc" id="L229">			System.err.println(&quot;S4.1&quot;);</span>
+<span class="nc" id="L230">			framework.waitForStop(0);</span>
+<span class="nc" id="L231">			System.err.println(&quot;S7&quot;);</span>
+<span class="nc" id="L232">		}</span>
+<span class="nc" id="L233">		System.exit(exitCode);</span>
+<span class="nc" id="L234">	}</span>
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.7.8.201612092310</span></div></body></html>
