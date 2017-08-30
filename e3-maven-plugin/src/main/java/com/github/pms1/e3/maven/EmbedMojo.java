@@ -150,11 +150,12 @@ public class EmbedMojo extends AbstractMojo {
 
 		byte[] file = digest(p);
 
-		return sizeMatch.stream().filter(p1 -> {
+		FileInfo fi = sizeMatch.stream().filter(p1 -> {
 			if (p1.sha1sum == null)
 				p1.sha1sum = digest(p1.p);
 			return Arrays.equals(p1.sha1sum, file);
-		}).findAny().orElse(null).p;
+		}).findAny().orElse(null);
+		return fi != null ? fi.p : null;
 	}
 
 	private void addBundle(Path p, Integer startLevel, Boolean start) throws IOException {
@@ -215,7 +216,18 @@ public class EmbedMojo extends AbstractMojo {
 
 	public void execute() throws MojoExecutionException, MojoFailureException {
 
-		System.err.println("EXECUTING " + this);
+		if (false) {
+			System.err.println("EXECUTING " + this);
+
+			for (MavenProject p : session.getAllProjects()) {
+				System.err.println("PROJECT " + p);
+				for (Artifact a : p.getAttachedArtifacts()) {
+					System.err.println("PROJECT " + p + " ARTIFACT " + a.getGroupId() + ":" + a.getArtifactId() + ":"
+							+ a.getVersion() + ":" + a.getClassifier() + ":" + a.getType() + " " + a.getFile());
+				}
+			}
+			System.err.println("EXECUTING2 " + this);
+		}
 
 		ProjectBuildingRequest pbRequest = new DefaultProjectBuildingRequest();
 		pbRequest.setLocalRepository(localRepository);
