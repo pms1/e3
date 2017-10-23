@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher;
 import org.eclipse.osgi.framework.log.FrameworkLog;
@@ -36,40 +38,55 @@ import org.osgi.service.url.URLStreamHandlerService;
 
 public class E3Main {
 
-	static class B {
+	static class BundleConfiguration {
 		String file;
 		int startLevel;
 		boolean autostart;
 		public Bundle bundle;
 	}
 
+	static Logger logger = Logger.getLogger(E3Main.class.getName());
+
 	public static void main(String[] args1) throws Exception {
-		int exitCode;
-
-		System.out.println("RUNNING " + Arrays.toString(args1));
-
 		Properties launcherProperties = new Properties();
 		try (InputStream in = E3Main.class.getResourceAsStream("/launcher.properties")) {
+			if (in == null)
+				throw new RuntimeException("Resource with configuration not found: /launcher.properties");
 			launcherProperties.load(in);
 		}
 
+		for (Map.Entry<Object, Object> e : launcherProperties.entrySet()) {
+			String key = (String) e.getKey();
+			if (key.startsWith("system."))
+				System.setProperty(key.substring(7), (String) e.getValue());
+		}
+
 		FrameworkFactory frameworkFactory = ServiceLoader.load(FrameworkFactory.class).iterator().next();
+
 		Map<String, String> config = new HashMap<String, String>();
+		for (Map.Entry<Object, Object> e : launcherProperties.entrySet()) {
+			String key = (String) e.getKey();
+			if (key.startsWith("framework."))
+				config.put(key.substring(10), (String) e.getValue());
+		}
 		config.put(Constants.FRAMEWORK_STORAGE_CLEAN, "true");
-		// set by EclipseStarter and needed to make some jvm packages visiable
+		// set by EclipseStarter and needed to make some jvm packages visible
 		// at runtime
-		config.put("osgi.compatibility.bootdelegation.default", "true");
-		config.put("eclipse.application", launcherProperties.getProperty("eclipse.application"));
-		config.put("eclipse.consoleLog", "true");
+		// config.put("osgi.compatibility.bootdelegation.default", "true");
+		// not sure how to handle this
+		// config.put("eclipse.consoleLog", "true");
 
 		Path storage = Files.createTempDirectory("e3");
+		logger.fine("Using temporary storage " + storage);
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run() {
 				try {
+					logger.fine("Deleting temporary storage " + storage);
 					Files.walk(storage).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+					logger.fine("Deleted temporary storage " + storage);
 				} catch (IOException e) {
-					throw new RuntimeException("Failed to clean storage at " + storage, e);
+					logger.log(Level.WARNING, "Failed to delete temporary storage " + storage + ": " + e, e);
 				}
 			}
 		});
@@ -80,9 +97,15 @@ public class E3Main {
 		// config.remove("osgi.framework");
 
 		// TODO: add some config properties
+
+		logger.fine("creating framework with config = " + config);
 		Framework framework = frameworkFactory.newFramework(config);
+
+		logger.fine("starting framework");
 		framework.start();
 
+		// install protocol handler for "embedded" protocol that is used to load
+		// from the fat jar
 		{
 			Hashtable<String, String[]> properties = new Hashtable<>(1);
 			properties.put(URLConstants.URL_HANDLER_PROTOCOL, new String[] { "embedded" });
@@ -103,15 +126,11 @@ public class E3Main {
 					}, properties);
 		}
 
-		String property = framework.getBundleContext().getProperty(Constants.FRAMEWORK_SYSTEMPACKAGES);
-
-		System.err.println("X " + property);
-
-		List<B> bs = new LinkedList<>();
+		List<BundleConfiguration> bs = new LinkedList<>();
 
 		for (String bundle : launcherProperties.getProperty("osgi.bundles").split(",", -1)) {
 
-			B b = new B();
+			BundleConfiguration b = new BundleConfiguration();
 			int x = bundle.indexOf("@");
 			if (x == -1)
 				throw new Error();
@@ -130,34 +149,32 @@ public class E3Main {
 			bs.add(b);
 		}
 
-		System.err.println("S1");
 		BundleContext context = framework.getBundleContext();
-		System.err.println("S1.1");
 
-		for (B b : bs) {
-			System.err.println("INSTALL " + b.file);
+		logger.fine("installing bundles");
+		for (BundleConfiguration b : bs) {
+			logger.finer("installing bundle " + b.file);
 			b.bundle = context.installBundle("embedded:" + b.file);
 		}
 
-		System.err.println("INSTALLED " + bs.size());
-
-		for (int sl = 0; sl <= Integer
-				.valueOf(launcherProperties.getProperty("osgi.bundles.defaultStartLevel")); ++sl) {
-			for (B b : bs) {
+		logger.fine("starting bundles");
+		for (int sl = 0; sl <= Integer.valueOf(config.get("osgi.bundles.defaultStartLevel")); ++sl) {
+			logger.fine("starting bundles in runlevel " + sl);
+			for (BundleConfiguration b : bs) {
 				if (b.startLevel != sl)
 					continue;
 				if (!b.autostart)
 					continue;
-				System.err.println("START " + sl + " " + b.bundle.getSymbolicName());
+				logger.fine("starting bundle " + b.bundle.getSymbolicName());
 				b.bundle.start();
 			}
 		}
 
-		System.err.println("S3");
+		if (logger.isLoggable(Level.FINEST))
+			for (Bundle b : context.getBundles())
+				logger.finest("bundle state: " + b.getSymbolicName() + " " + b.getState());
 
-		for (Bundle b : context.getBundles()) {
-			System.err.println("STATE " + b.getSymbolicName() + " " + b.getState());
-		}
+		int exitCode;
 		try {
 
 			boolean launchDefault = true;
@@ -216,20 +233,21 @@ public class E3Main {
 			ServiceRegistration<?> appLauncherRegistration = context
 					.registerService(ApplicationLauncher.class.getName(), appLauncher, null);
 
-			System.err.println("S3");
-
+			logger.fine("Starting EclipseAppLauncher with arguments " + Arrays.toString(args1));
 			appLauncher.start(args1);
-
+			logger.fine("EclipseAppLauncher exited normally");
 			exitCode = 0;
 		} catch (Throwable t) {
+			logger.log(Level.FINE, "EclipseAppLauncher terminated with exception: " + t, t);
 			t.printStackTrace();
 			exitCode = 1;
 		} finally {
+			logger.fine("Initiating framework stop");
 			framework.stop();
-			System.err.println("S4.1");
+			logger.fine("Waiting for framework stop");
 			framework.waitForStop(0);
-			System.err.println("S7");
 		}
+		logger.fine("Exiting");
 		System.exit(exitCode);
 	}
 }

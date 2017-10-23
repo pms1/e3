@@ -20,9 +20,11 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.jar.Attributes;
@@ -264,14 +266,66 @@ public class EmbedMojo extends AbstractMojo {
 				for (Path p : Files.walk(classesDir.toPath()).filter(Files::isRegularFile).collect(Collectors.toList()))
 					register(p);
 
-			Set<Integer> defaultStartLevels = new HashSet<>();
-			Set<String> applications = new HashSet<>();
 			String framework0 = null;
 
+			Properties launcherProperties = new Properties();
 			for (Artifact a : directDependencies) {
 
 				try (FileSystem fs = FileSystems.newFileSystem(a.getFile().toPath(), null)) {
 					Properties p = new Properties();
+
+					List<Path> inis = new LinkedList<>();
+
+					for (Path p1 : fs.getRootDirectories()) {
+						Files.list(p1).forEach((p2) -> {
+							if (p2.getFileName().toString().endsWith(".ini"))
+								inis.add(p2);
+						});
+					}
+
+					Path ini;
+					switch (inis.size()) {
+					case 0:
+						ini = null;
+						break;
+					case 1:
+						ini = inis.iterator().next();
+						if (!ini.getFileName().toString().equals("eclipse.ini"))
+							getLog().info("Using '" + ini.getFileName() + "' as eclipse.ini");
+						break;
+					default:
+						Optional<Path> oini = inis.stream()
+								.filter(p1 -> p1.getFileName().toString().equals("eclipse.ini")).findAny();
+						if (oini.isPresent()) {
+							ini = oini.get();
+						} else {
+							ini = null;
+							getLog().warn("Multiple candidates for eclipse.ini found, using neither of them");
+						}
+						break;
+					}
+
+					if (ini != null)
+						try (BufferedReader br = Files.newBufferedReader(ini)) {
+							boolean inVmargs = false;
+							for (String s = br.readLine(); s != null; s = br.readLine()) {
+								if (s.equals("-vmargs")) {
+									inVmargs = true;
+								} else if (inVmargs) {
+									if (s.startsWith("-D")) {
+										int idx = s.indexOf("=");
+										String key = s.substring(2, idx);
+										String value = s.substring(idx + 1);
+										Object old = launcherProperties.put("system." + key, value);
+										if (old != null && !Objects.equals(old, value))
+											throw new MojoFailureException(
+													"System property '" + key + "' in " + ini.getFileName()
+															+ " has different values in different artifacts: '" + old
+															+ "', '" + value + "'");
+									}
+								}
+							}
+						}
 
 					try (InputStream in = Files.newInputStream(fs.getPath("configuration", "config.ini"))) {
 						p.load(in);
@@ -279,8 +333,6 @@ public class EmbedMojo extends AbstractMojo {
 
 					String framework = null;
 					String bundles = null;
-					Integer defaultStartLevel = null;
-					String application = null;
 					String frameworkExtensions = "";
 					URI simpleConfigurator = null;
 
@@ -288,47 +340,41 @@ public class EmbedMojo extends AbstractMojo {
 						String key = (String) e.getKey();
 						String value = (String) e.getValue();
 
+						boolean passThrough = true;
+
 						switch (key) {
 						case "osgi.bundles":
 							bundles = value;
-							break;
-						case "osgi.bundles.defaultStartLevel":
-							defaultStartLevel = Integer.valueOf(value);
+							passThrough = false;
 							break;
 						case "osgi.framework":
 							framework = value;
+							passThrough = false;
 							break;
 						case "osgi.framework.extensions":
 							frameworkExtensions = value;
-							break;
-						case "eclipse.application":
-							application = value;
+							passThrough = false;
 							break;
 						case "org.eclipse.equinox.simpleconfigurator.configUrl":
 							simpleConfigurator = URI.create(value);
+							passThrough = false;
 							break;
-						case "eclipse.p2.data.area":
-							break;
-						case "eclipse.p2.profile":
-							break;
-						default:
-							getLog().warn("Unknown config.ini property '" + key + "' = '" + value + "' ignored.");
+						}
+
+						if (passThrough) {
+							Object old = launcherProperties.put("framework." + key, value);
+							if (old != null && !Objects.equals(old, value))
+								throw new MojoFailureException("Property '" + key
+										+ "' in config.ini has different values in different artifacts: '" + old
+										+ "', '" + value + "'");
 						}
 					}
 
 					if (framework == null)
-						throw new MojoExecutionException("Missing config.ini: 'osgi.framework'");
+						throw new MojoExecutionException("Missing property 'osgi.framework' in config.ini");
 
 					if (bundles == null)
-						throw new MojoExecutionException("Missing config.ini: 'osgi.bundles'");
-
-					if (defaultStartLevel == null)
-						throw new MojoExecutionException("Missing config.ini: 'osgi.bundles.defaultStartLevel'");
-					defaultStartLevels.add(defaultStartLevel);
-
-					if (application == null)
-						throw new MojoExecutionException("Missing config.ini: 'eclipse.application'");
-					applications.add(application);
+						throw new MojoExecutionException("Missing property 'osgi.bundles' in config.ini");
 
 					URI frameworkUri = URI.create(framework);
 
@@ -481,29 +527,19 @@ public class EmbedMojo extends AbstractMojo {
 						}
 					}
 				}
-
-				Properties launcherProperties = new Properties();
-				if (defaultStartLevels.size() != 1)
-					throw new Error();
-				launcherProperties.put("osgi.bundles.defaultStartLevel",
-						defaultStartLevels.iterator().next().toString());
-
-				if (applications.size() != 1)
-					throw new Error();
-				launcherProperties.put("eclipse.application", applications.iterator().next());
-
-				launcherProperties.put("osgi.bundles", this.bundles.stream().map(bs -> {
-					String s = bs.relPath + "@" + (bs.startLevel != null ? bs.startLevel : "0");
-					if (bs.start != null && bs.start)
-						s += ":start";
-					return s;
-				}).collect(Collectors.joining(",")));
-
-				try (OutputStream out = Files.newOutputStream(classesDir.toPath().resolve("launcher.properties"))) {
-					launcherProperties.store(out, "");
-				}
-
 			}
+
+			launcherProperties.put("osgi.bundles", this.bundles.stream().map(bs -> {
+				String s = bs.relPath + "@" + (bs.startLevel != null ? bs.startLevel : "0");
+				if (bs.start != null && bs.start)
+					s += ":start";
+				return s;
+			}).collect(Collectors.joining(",")));
+
+			try (OutputStream out = Files.newOutputStream(classesDir.toPath().resolve("launcher.properties"))) {
+				launcherProperties.store(out, "");
+			}
+
 		} catch (DependencyGraphBuilderException | IOException | MavenExecutionException e) {
 			throw new MojoExecutionException("failed", e);
 		}
