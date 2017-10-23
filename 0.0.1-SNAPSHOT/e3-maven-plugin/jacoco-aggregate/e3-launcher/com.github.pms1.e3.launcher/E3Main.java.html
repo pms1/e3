@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher;
 import org.eclipse.osgi.framework.log.FrameworkLog;
@@ -34,203 +36,219 @@ import org.osgi.service.url.AbstractURLStreamHandlerService;
 import org.osgi.service.url.URLConstants;
 import org.osgi.service.url.URLStreamHandlerService;
 
-<span class="nc" id="L37">public class E3Main {</span>
+<span class="nc" id="L39">public class E3Main {</span>
 
-<span class="nc" id="L39">	static class B {</span>
+<span class="nc" id="L41">	static class BundleConfiguration {</span>
 		String file;
 		int startLevel;
 		boolean autostart;
 		public Bundle bundle;
 	}
 
+<span class="nc" id="L48">	static Logger logger = Logger.getLogger(E3Main.class.getName());</span>
+
 	public static void main(String[] args1) throws Exception {
-		int exitCode;
-
-<span class="nc" id="L49">		System.out.println(&quot;RUNNING &quot; + Arrays.toString(args1));</span>
-
 <span class="nc" id="L51">		Properties launcherProperties = new Properties();</span>
 <span class="nc" id="L52">		try (InputStream in = E3Main.class.getResourceAsStream(&quot;/launcher.properties&quot;)) {</span>
-<span class="nc" id="L53">			launcherProperties.load(in);</span>
-<span class="nc bnc" id="L54" title="All 8 branches missed.">		}</span>
+<span class="nc bnc" id="L53" title="All 2 branches missed.">			if (in == null)</span>
+<span class="nc" id="L54">				throw new RuntimeException(&quot;Resource with configuration not found: /launcher.properties&quot;);</span>
+<span class="nc" id="L55">			launcherProperties.load(in);</span>
+<span class="nc bnc" id="L56" title="All 8 branches missed.">		}</span>
 
-<span class="nc" id="L56">		FrameworkFactory frameworkFactory = ServiceLoader.load(FrameworkFactory.class).iterator().next();</span>
-<span class="nc" id="L57">		Map&lt;String, String&gt; config = new HashMap&lt;String, String&gt;();</span>
-<span class="nc" id="L58">		config.put(Constants.FRAMEWORK_STORAGE_CLEAN, &quot;true&quot;);</span>
-		// set by EclipseStarter and needed to make some jvm packages visiable
+<span class="nc bnc" id="L58" title="All 2 branches missed.">		for (Map.Entry&lt;Object, Object&gt; e : launcherProperties.entrySet()) {</span>
+<span class="nc" id="L59">			String key = (String) e.getKey();</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">			if (key.startsWith(&quot;system.&quot;))</span>
+<span class="nc" id="L61">				System.setProperty(key.substring(7), (String) e.getValue());</span>
+<span class="nc" id="L62">		}</span>
+
+<span class="nc" id="L64">		FrameworkFactory frameworkFactory = ServiceLoader.load(FrameworkFactory.class).iterator().next();</span>
+
+<span class="nc" id="L66">		Map&lt;String, String&gt; config = new HashMap&lt;String, String&gt;();</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">		for (Map.Entry&lt;Object, Object&gt; e : launcherProperties.entrySet()) {</span>
+<span class="nc" id="L68">			String key = (String) e.getKey();</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">			if (key.startsWith(&quot;framework.&quot;))</span>
+<span class="nc" id="L70">				config.put(key.substring(10), (String) e.getValue());</span>
+<span class="nc" id="L71">		}</span>
+<span class="nc" id="L72">		config.put(Constants.FRAMEWORK_STORAGE_CLEAN, &quot;true&quot;);</span>
+		// set by EclipseStarter and needed to make some jvm packages visible
 		// at runtime
-<span class="nc" id="L61">		config.put(&quot;osgi.compatibility.bootdelegation.default&quot;, &quot;true&quot;);</span>
-<span class="nc" id="L62">		config.put(&quot;eclipse.application&quot;, launcherProperties.getProperty(&quot;eclipse.application&quot;));</span>
-<span class="nc" id="L63">		config.put(&quot;eclipse.consoleLog&quot;, &quot;true&quot;);</span>
+		// config.put(&quot;osgi.compatibility.bootdelegation.default&quot;, &quot;true&quot;);
+		// not sure how to handle this
+		// config.put(&quot;eclipse.consoleLog&quot;, &quot;true&quot;);
 
-<span class="nc" id="L65">		Path storage = Files.createTempDirectory(&quot;e3&quot;);</span>
-<span class="nc" id="L66">		Runtime.getRuntime().addShutdownHook(new Thread() {</span>
+<span class="nc" id="L79">		Path storage = Files.createTempDirectory(&quot;e3&quot;);</span>
+<span class="nc" id="L80">		logger.fine(&quot;Using temporary storage &quot; + storage);</span>
+<span class="nc" id="L81">		Runtime.getRuntime().addShutdownHook(new Thread() {</span>
 			@Override
 			public void run() {
 				try {
-<span class="nc" id="L70">					Files.walk(storage).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);</span>
-<span class="nc" id="L71">				} catch (IOException e) {</span>
-<span class="nc" id="L72">					throw new RuntimeException(&quot;Failed to clean storage at &quot; + storage, e);</span>
-<span class="nc" id="L73">				}</span>
-<span class="nc" id="L74">			}</span>
+<span class="nc" id="L85">					logger.fine(&quot;Deleting temporary storage &quot; + storage);</span>
+<span class="nc" id="L86">					Files.walk(storage).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);</span>
+<span class="nc" id="L87">					logger.fine(&quot;Deleted temporary storage &quot; + storage);</span>
+<span class="nc" id="L88">				} catch (IOException e) {</span>
+<span class="nc" id="L89">					logger.log(Level.WARNING, &quot;Failed to delete temporary storage &quot; + storage + &quot;: &quot; + e, e);</span>
+<span class="nc" id="L90">				}</span>
+<span class="nc" id="L91">			}</span>
 		});
-<span class="nc" id="L76">		config.put(Constants.FRAMEWORK_STORAGE, storage.toString());</span>
+<span class="nc" id="L93">		config.put(Constants.FRAMEWORK_STORAGE, storage.toString());</span>
 
 		// for (Object k : configIni.keySet())
 		// config.put((String) k, configIni.getProperty((String) k));
 		// config.remove(&quot;osgi.framework&quot;);
 
 		// TODO: add some config properties
-<span class="nc" id="L83">		Framework framework = frameworkFactory.newFramework(config);</span>
-<span class="nc" id="L84">		framework.start();</span>
 
+<span class="nc" id="L101">		logger.fine(&quot;creating framework with config = &quot; + config);</span>
+<span class="nc" id="L102">		Framework framework = frameworkFactory.newFramework(config);</span>
+
+<span class="nc" id="L104">		logger.fine(&quot;starting framework&quot;);</span>
+<span class="nc" id="L105">		framework.start();</span>
+
+		// install protocol handler for &quot;embedded&quot; protocol that is used to load
+		// from the fat jar
 		{
-<span class="nc" id="L87">			Hashtable&lt;String, String[]&gt; properties = new Hashtable&lt;&gt;(1);</span>
-<span class="nc" id="L88">			properties.put(URLConstants.URL_HANDLER_PROTOCOL, new String[] { &quot;embedded&quot; });</span>
+<span class="nc" id="L110">			Hashtable&lt;String, String[]&gt; properties = new Hashtable&lt;&gt;(1);</span>
+<span class="nc" id="L111">			properties.put(URLConstants.URL_HANDLER_PROTOCOL, new String[] { &quot;embedded&quot; });</span>
 
-<span class="nc" id="L90">			framework.getBundleContext().registerService(URLStreamHandlerService.class.getName(),</span>
-<span class="nc" id="L91">					new AbstractURLStreamHandlerService() {</span>
+<span class="nc" id="L113">			framework.getBundleContext().registerService(URLStreamHandlerService.class.getName(),</span>
+<span class="nc" id="L114">					new AbstractURLStreamHandlerService() {</span>
 
 						@Override
 						public URLConnection openConnection(URL u) throws IOException {
-<span class="nc" id="L95">							URL u2 = E3Main.class.getClassLoader().getResource(u.getPath());</span>
+<span class="nc" id="L118">							URL u2 = E3Main.class.getClassLoader().getResource(u.getPath());</span>
 
-<span class="nc bnc" id="L97" title="All 2 branches missed.">							if (u2 == null)</span>
-<span class="nc" id="L98">								throw new IOException(&quot;Not found: &quot; + u);</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">							if (u2 == null)</span>
+<span class="nc" id="L121">								throw new IOException(&quot;Not found: &quot; + u);</span>
 
-<span class="nc" id="L100">							return u2.openConnection();</span>
+<span class="nc" id="L123">							return u2.openConnection();</span>
 						}
 
 					}, properties);
 		}
 
-<span class="nc" id="L106">		String property = framework.getBundleContext().getProperty(Constants.FRAMEWORK_SYSTEMPACKAGES);</span>
+<span class="nc" id="L129">		List&lt;BundleConfiguration&gt; bs = new LinkedList&lt;&gt;();</span>
 
-<span class="nc" id="L108">		System.err.println(&quot;X &quot; + property);</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">		for (String bundle : launcherProperties.getProperty(&quot;osgi.bundles&quot;).split(&quot;,&quot;, -1)) {</span>
 
-<span class="nc" id="L110">		List&lt;B&gt; bs = new LinkedList&lt;&gt;();</span>
-
-<span class="nc bnc" id="L112" title="All 2 branches missed.">		for (String bundle : launcherProperties.getProperty(&quot;osgi.bundles&quot;).split(&quot;,&quot;, -1)) {</span>
-
-<span class="nc" id="L114">			B b = new B();</span>
-<span class="nc" id="L115">			int x = bundle.indexOf(&quot;@&quot;);</span>
-<span class="nc bnc" id="L116" title="All 2 branches missed.">			if (x == -1)</span>
-<span class="nc" id="L117">				throw new Error();</span>
+<span class="nc" id="L133">			BundleConfiguration b = new BundleConfiguration();</span>
+<span class="nc" id="L134">			int x = bundle.indexOf(&quot;@&quot;);</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">			if (x == -1)</span>
+<span class="nc" id="L136">				throw new Error();</span>
 
 			// FIXME: use RE
 
-<span class="nc" id="L121">			b.file = bundle.substring(0, x);</span>
+<span class="nc" id="L140">			b.file = bundle.substring(0, x);</span>
 
-<span class="nc" id="L123">			String rest = bundle.substring(x + 1);</span>
-<span class="nc bnc" id="L124" title="All 2 branches missed.">			if (rest.endsWith(&quot;:start&quot;)) {</span>
-<span class="nc" id="L125">				b.autostart = true;</span>
-<span class="nc" id="L126">				rest = rest.substring(0, rest.length() - 6);</span>
+<span class="nc" id="L142">			String rest = bundle.substring(x + 1);</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">			if (rest.endsWith(&quot;:start&quot;)) {</span>
+<span class="nc" id="L144">				b.autostart = true;</span>
+<span class="nc" id="L145">				rest = rest.substring(0, rest.length() - 6);</span>
 			}
-<span class="nc" id="L128">			b.startLevel = Integer.valueOf(rest);</span>
+<span class="nc" id="L147">			b.startLevel = Integer.valueOf(rest);</span>
 
-<span class="nc" id="L130">			bs.add(b);</span>
+<span class="nc" id="L149">			bs.add(b);</span>
 		}
 
-<span class="nc" id="L133">		System.err.println(&quot;S1&quot;);</span>
-<span class="nc" id="L134">		BundleContext context = framework.getBundleContext();</span>
-<span class="nc" id="L135">		System.err.println(&quot;S1.1&quot;);</span>
+<span class="nc" id="L152">		BundleContext context = framework.getBundleContext();</span>
 
-<span class="nc bnc" id="L137" title="All 2 branches missed.">		for (B b : bs) {</span>
-<span class="nc" id="L138">			System.err.println(&quot;INSTALL &quot; + b.file);</span>
-<span class="nc" id="L139">			b.bundle = context.installBundle(&quot;embedded:&quot; + b.file);</span>
-<span class="nc" id="L140">		}</span>
+<span class="nc" id="L154">		logger.fine(&quot;installing bundles&quot;);</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">		for (BundleConfiguration b : bs) {</span>
+<span class="nc" id="L156">			logger.finer(&quot;installing bundle &quot; + b.file);</span>
+<span class="nc" id="L157">			b.bundle = context.installBundle(&quot;embedded:&quot; + b.file);</span>
+<span class="nc" id="L158">		}</span>
 
-<span class="nc" id="L142">		System.err.println(&quot;INSTALLED &quot; + bs.size());</span>
-
-<span class="nc bnc" id="L144" title="All 2 branches missed.">		for (int sl = 0; sl &lt;= Integer</span>
-<span class="nc" id="L145">				.valueOf(launcherProperties.getProperty(&quot;osgi.bundles.defaultStartLevel&quot;)); ++sl) {</span>
-<span class="nc bnc" id="L146" title="All 2 branches missed.">			for (B b : bs) {</span>
-<span class="nc bnc" id="L147" title="All 2 branches missed.">				if (b.startLevel != sl)</span>
-<span class="nc" id="L148">					continue;</span>
-<span class="nc bnc" id="L149" title="All 2 branches missed.">				if (!b.autostart)</span>
-<span class="nc" id="L150">					continue;</span>
-<span class="nc" id="L151">				System.err.println(&quot;START &quot; + sl + &quot; &quot; + b.bundle.getSymbolicName());</span>
-<span class="nc" id="L152">				b.bundle.start();</span>
-<span class="nc" id="L153">			}</span>
+<span class="nc" id="L160">		logger.fine(&quot;starting bundles&quot;);</span>
+<span class="nc bnc" id="L161" title="All 2 branches missed.">		for (int sl = 0; sl &lt;= Integer.valueOf(config.get(&quot;osgi.bundles.defaultStartLevel&quot;)); ++sl) {</span>
+<span class="nc" id="L162">			logger.fine(&quot;starting bundles in runlevel &quot; + sl);</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">			for (BundleConfiguration b : bs) {</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">				if (b.startLevel != sl)</span>
+<span class="nc" id="L165">					continue;</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">				if (!b.autostart)</span>
+<span class="nc" id="L167">					continue;</span>
+<span class="nc" id="L168">				logger.fine(&quot;starting bundle &quot; + b.bundle.getSymbolicName());</span>
+<span class="nc" id="L169">				b.bundle.start();</span>
+<span class="nc" id="L170">			}</span>
 		}
 
-<span class="nc" id="L156">		System.err.println(&quot;S3&quot;);</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">		if (logger.isLoggable(Level.FINEST))</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">			for (Bundle b : context.getBundles())</span>
+<span class="nc" id="L175">				logger.finest(&quot;bundle state: &quot; + b.getSymbolicName() + &quot; &quot; + b.getState());</span>
 
-<span class="nc bnc" id="L158" title="All 2 branches missed.">		for (Bundle b : context.getBundles()) {</span>
-<span class="nc" id="L159">			System.err.println(&quot;STATE &quot; + b.getSymbolicName() + &quot; &quot; + b.getState());</span>
-		}
+		int exitCode;
 		try {
 
-<span class="nc" id="L163">			boolean launchDefault = true;</span>
-<span class="nc" id="L164">			EquinoxConfiguration equinoxConfig = null;</span>
-<span class="nc" id="L165">			FrameworkLog log = new FrameworkLog() {</span>
+<span class="nc" id="L180">			boolean launchDefault = true;</span>
+<span class="nc" id="L181">			EquinoxConfiguration equinoxConfig = null;</span>
+<span class="nc" id="L182">			FrameworkLog log = new FrameworkLog() {</span>
 
 				@Override
 				public void log(FrameworkEvent frameworkEvent) {
-<span class="nc" id="L169">					System.err.println(&quot;LOG &quot; + frameworkEvent);</span>
-<span class="nc" id="L170">				}</span>
+<span class="nc" id="L186">					System.err.println(&quot;LOG &quot; + frameworkEvent);</span>
+<span class="nc" id="L187">				}</span>
 
 				@Override
 				public void log(FrameworkLogEntry logEntry) {
-<span class="nc" id="L174">					System.err.println(&quot;LOG &quot; + logEntry);</span>
+<span class="nc" id="L191">					System.err.println(&quot;LOG &quot; + logEntry);</span>
 
-<span class="nc" id="L176">				}</span>
+<span class="nc" id="L193">				}</span>
 
 				@Override
 				public void setWriter(Writer newWriter, boolean append) {
-<span class="nc" id="L180">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L197">					new Throwable().printStackTrace();</span>
 					// TODO Auto-generated method stub
 
-<span class="nc" id="L183">				}</span>
+<span class="nc" id="L200">				}</span>
 
 				@Override
 				public void setFile(File newFile, boolean append) throws IOException {
 					// TODO Auto-generated method stub
-<span class="nc" id="L188">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L205">					new Throwable().printStackTrace();</span>
 
-<span class="nc" id="L190">				}</span>
+<span class="nc" id="L207">				}</span>
 
 				@Override
 				public File getFile() {
-<span class="nc" id="L194">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L211">					new Throwable().printStackTrace();</span>
 					// TODO Auto-generated method stub
-<span class="nc" id="L196">					return null;</span>
+<span class="nc" id="L213">					return null;</span>
 				}
 
 				@Override
 				public void setConsoleLog(boolean consoleLog) {
-<span class="nc" id="L201">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L218">					new Throwable().printStackTrace();</span>
 					// TODO Auto-generated method stub
 
-<span class="nc" id="L204">				}</span>
+<span class="nc" id="L221">				}</span>
 
 				@Override
 				public void close() {
-<span class="nc" id="L208">					new Throwable().printStackTrace();</span>
+<span class="nc" id="L225">					new Throwable().printStackTrace();</span>
 					// TODO Auto-generated method stub
 
-<span class="nc" id="L211">				}</span>
+<span class="nc" id="L228">				}</span>
 
 			};
 
-<span class="nc" id="L215">			EclipseAppLauncher appLauncher = new EclipseAppLauncher(context, false, launchDefault, log, equinoxConfig);</span>
-<span class="nc" id="L216">			ServiceRegistration&lt;?&gt; appLauncherRegistration = context</span>
-<span class="nc" id="L217">					.registerService(ApplicationLauncher.class.getName(), appLauncher, null);</span>
+<span class="nc" id="L232">			EclipseAppLauncher appLauncher = new EclipseAppLauncher(context, false, launchDefault, log, equinoxConfig);</span>
+<span class="nc" id="L233">			ServiceRegistration&lt;?&gt; appLauncherRegistration = context</span>
+<span class="nc" id="L234">					.registerService(ApplicationLauncher.class.getName(), appLauncher, null);</span>
 
-<span class="nc" id="L219">			System.err.println(&quot;S3&quot;);</span>
-
-<span class="nc" id="L221">			appLauncher.start(args1);</span>
-
-<span class="nc" id="L223">			exitCode = 0;</span>
-<span class="nc" id="L224">		} catch (Throwable t) {</span>
-<span class="nc" id="L225">			t.printStackTrace();</span>
-<span class="nc" id="L226">			exitCode = 1;</span>
+<span class="nc" id="L236">			logger.fine(&quot;Starting EclipseAppLauncher with arguments &quot; + Arrays.toString(args1));</span>
+<span class="nc" id="L237">			appLauncher.start(args1);</span>
+<span class="nc" id="L238">			logger.fine(&quot;EclipseAppLauncher exited normally&quot;);</span>
+<span class="nc" id="L239">			exitCode = 0;</span>
+<span class="nc" id="L240">		} catch (Throwable t) {</span>
+<span class="nc" id="L241">			logger.log(Level.FINE, &quot;EclipseAppLauncher terminated with exception: &quot; + t, t);</span>
+<span class="nc" id="L242">			t.printStackTrace();</span>
+<span class="nc" id="L243">			exitCode = 1;</span>
 		} finally {
-<span class="nc" id="L228">			framework.stop();</span>
-<span class="nc" id="L229">			System.err.println(&quot;S4.1&quot;);</span>
-<span class="nc" id="L230">			framework.waitForStop(0);</span>
-<span class="nc" id="L231">			System.err.println(&quot;S7&quot;);</span>
-<span class="nc" id="L232">		}</span>
-<span class="nc" id="L233">		System.exit(exitCode);</span>
-<span class="nc" id="L234">	}</span>
+<span class="nc" id="L245">			logger.fine(&quot;Initiating framework stop&quot;);</span>
+<span class="nc" id="L246">			framework.stop();</span>
+<span class="nc" id="L247">			logger.fine(&quot;Waiting for framework stop&quot;);</span>
+<span class="nc" id="L248">			framework.waitForStop(0);</span>
+<span class="nc" id="L249">		}</span>
+<span class="nc" id="L250">		logger.fine(&quot;Exiting&quot;);</span>
+<span class="nc" id="L251">		System.exit(exitCode);</span>
+<span class="nc" id="L252">	}</span>
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.7.8.201612092310</span></div></body></html>
