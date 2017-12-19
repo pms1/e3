@@ -234,9 +234,15 @@ public class E3Main {
 					.registerService(ApplicationLauncher.class.getName(), appLauncher, null);
 
 			logger.fine("Starting EclipseAppLauncher with arguments " + Arrays.toString(args1));
-			appLauncher.start(args1);
+			Object result = appLauncher.start(args1);
 			logger.fine("EclipseAppLauncher exited normally");
-			exitCode = 0;
+
+			appLauncherRegistration.unregister();
+
+			if (result instanceof Integer)
+				exitCode = (Integer) result;
+			else
+				exitCode = 0;
 		} catch (Throwable t) {
 			logger.log(Level.FINE, "EclipseAppLauncher terminated with exception: " + t, t);
 			t.printStackTrace();
