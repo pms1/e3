@@ -92,6 +92,15 @@ public class E3Main {
 		});
 		config.put(Constants.FRAMEWORK_STORAGE, storage.toString());
 
+		// copy pass-through configuration files to the configuration area
+		for (String s : launcherProperties.getProperty("configuration.copy").split(",", -1)) {
+			Path dest = storage.resolve(s);
+			Files.createDirectories(dest.getParent());
+			try (InputStream resourceAsStream = ClassLoader.getSystemClassLoader()
+					.getResourceAsStream(".configuration/" + s)) {
+				Files.copy(resourceAsStream, dest);
+			}
+		}
 		// for (Object k : configIni.keySet())
 		// config.put((String) k, configIni.getProperty((String) k));
 		// config.remove("osgi.framework");

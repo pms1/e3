@@ -12,9 +12,12 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -269,10 +272,11 @@ public class EmbedMojo extends AbstractMojo {
 			String framework0 = null;
 
 			Properties launcherProperties = new Properties();
+			Set<String> configurationCopy = new HashSet<>();
+
 			for (Artifact a : directDependencies) {
 
 				try (FileSystem fs = FileSystems.newFileSystem(a.getFile().toPath(), null)) {
-					Properties p = new Properties();
 
 					List<Path> inis = new LinkedList<>();
 
@@ -327,16 +331,55 @@ public class EmbedMojo extends AbstractMojo {
 							}
 						}
 
-					try (InputStream in = Files.newInputStream(fs.getPath("configuration", "config.ini"))) {
-						p.load(in);
-					}
+					Properties configIni = new Properties();
+
+					Path configuration = fs.getPath("/configuration");
+					Files.walkFileTree(configuration, new SimpleFileVisitor<Path>() {
+
+						public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+							Path rel = configuration.relativize(file);
+
+							boolean copy = false;
+
+							switch (rel.toString()) {
+							case "config.ini":
+								try (InputStream in = Files.newInputStream(fs.getPath("configuration", "config.ini"))) {
+									configIni.load(in);
+								}
+								break;
+							case "org.eclipse.update/platform.xml":
+								copy = true;
+								break;
+							case "org.eclipse.equinox.simpleconfigurator/bundles.info":
+								break;
+							default:
+								// FIXME: remove later
+								System.err.println("UNHANDLED CONFIGURATION FILE " + rel);
+								break;
+							}
+
+							if (copy) {
+								Path target = classesDir.toPath().resolve(".configuration").resolve(rel.toString());
+								// org.eclipse.update/platform.xml differs, but the differences should not be
+								// relevant. If other files are copied, they must be merged here.
+								if (!Files.exists(target)) {
+									Files.createDirectories(target.getParent());
+									Files.copy(file, target);
+
+									configurationCopy.add(rel.toString());
+								}
+							}
+
+							return super.visitFile(file, attrs);
+						};
+					});
 
 					String framework = null;
 					String bundles = null;
 					String frameworkExtensions = "";
 					URI simpleConfigurator = null;
 
-					for (Map.Entry<Object, Object> e : p.entrySet()) {
+					for (Map.Entry<Object, Object> e : configIni.entrySet()) {
 						String key = (String) e.getKey();
 						String value = (String) e.getValue();
 
@@ -536,6 +579,7 @@ public class EmbedMojo extends AbstractMojo {
 				return s;
 			}).collect(Collectors.joining(",")));
 
+			launcherProperties.put("configuration.copy", configurationCopy.stream().collect(Collectors.joining(",")));
 			try (OutputStream out = Files.newOutputStream(classesDir.toPath().resolve("launcher.properties"))) {
 				launcherProperties.store(out, "");
 			}
