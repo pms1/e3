@@ -1,6 +1,6 @@
 GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
 Eclipse Equinox Embedder Maven Plugin/e3-launcher,com.github.pms1.e3.launcher,E3Main.BundleConfiguration,3,0,0,0,1,0,1,0,1,0
 Eclipse Equinox Embedder Maven Plugin/e3-launcher,com.github.pms1.e3.launcher,E3Main.new FrameworkLog() {...},51,0,0,0,15,0,8,0,8,0
-Eclipse Equinox Embedder Maven Plugin/e3-launcher,com.github.pms1.e3.launcher,E3Main,530,0,38,0,87,0,22,0,3,0
+Eclipse Equinox Embedder Maven Plugin/e3-launcher,com.github.pms1.e3.launcher,E3Main,627,0,50,0,97,0,28,0,3,0
 Eclipse Equinox Embedder Maven Plugin/e3-launcher,com.github.pms1.e3.launcher,E3Main.new AbstractURLStreamHandlerService() {...},26,0,2,0,5,0,3,0,2,0
 Eclipse Equinox Embedder Maven Plugin/e3-launcher,com.github.pms1.e3.launcher,E3Main.new Thread() {...},59,0,0,0,8,0,2,0,2,0
