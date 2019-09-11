@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>com.github.pms1.e3</groupId>
 		<artifactId>parent</artifactId>
-		<version>0.0.1-SNAPSHOT</version>
+		<version>0.0.2-SNAPSHOT</version>
 	</parent>
 	
 	<artifactId>e3-maven-plugin</artifactId>
@@ -41,7 +41,7 @@
 		<dependency>
 			<groupId>com.github.pms1.e3</groupId>
 			<artifactId>e3-launcher</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
+			<version>0.0.2-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 	
