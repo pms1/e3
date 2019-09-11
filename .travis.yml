@@ -23,3 +23,6 @@ deploy:
 
 after_success:
     - mvn -B clean test site jacoco:report
+
+# see https://travis-ci.community/t/install-of-oracle-jdk-8-failing/3038/8
+dist: trusty

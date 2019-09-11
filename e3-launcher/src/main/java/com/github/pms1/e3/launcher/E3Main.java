@@ -20,6 +20,7 @@ import java.util.ServiceLoader;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.core.runtime.adaptor.EclipseStarter;
 import org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher;
 import org.eclipse.osgi.framework.log.FrameworkLog;
 import org.eclipse.osgi.framework.log.FrameworkLogEntry;
@@ -124,7 +125,10 @@ public class E3Main {
 
 						@Override
 						public URLConnection openConnection(URL u) throws IOException {
-							URL u2 = E3Main.class.getClassLoader().getResource(u.getPath());
+							String p = u.getPath();
+							if(p.startsWith("/"))
+								p = p.substring(1);
+							URL u2 = E3Main.class.getClassLoader().getResource(p);
 
 							if (u2 == null)
 								throw new IOException("Not found: " + u);
