@@ -507,18 +507,19 @@ public class EmbedMojo extends AbstractMojo {
 						}
 					}
 
-					for (String spec : frameworkExtensions.split(",", -1)) {
-						Matcher m = Pattern.compile("reference:file:(?<file>.+)").matcher(spec);
-						if (!m.matches())
-							throw new MojoExecutionException("Unhandled specification: " + spec);
+					if (!frameworkExtensions.isEmpty())
+						for (String spec : frameworkExtensions.split(",", -1)) {
+							Matcher m = Pattern.compile("reference:file:(?<file>.+)").matcher(spec);
+							if (!m.matches())
+								throw new MojoExecutionException("Unhandled specification: " + spec);
 
-						Path plugin = fs.getPath("plugins", m.group("file"));
-						if (Files.isDirectory(plugin)) {
-							getLog().error("Not supported: directory: " + spec);
-						} else {
-							addBundle(plugin, null, null);
+							Path plugin = fs.getPath("plugins", m.group("file"));
+							if (Files.isDirectory(plugin)) {
+								getLog().error("Not supported: directory: " + spec);
+							} else {
+								addBundle(plugin, null, null);
+							}
 						}
-					}
 
 					if (simpleConfigurator != null) {
 						try (BufferedReader r = Files.newBufferedReader(
