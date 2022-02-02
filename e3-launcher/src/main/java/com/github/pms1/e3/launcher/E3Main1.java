@@ -3,7 +3,6 @@ package com.github.pms1.e3.launcher;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.Writer;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
@@ -24,8 +23,8 @@ import java.util.logging.Logger;
 
 import org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher;
 import org.eclipse.osgi.framework.log.FrameworkLog;
-import org.eclipse.osgi.framework.log.FrameworkLogEntry;
 import org.eclipse.osgi.internal.framework.EquinoxConfiguration;
+import org.eclipse.osgi.service.environment.EnvironmentInfo;
 import org.eclipse.osgi.service.runnable.ApplicationLauncher;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
@@ -93,9 +92,12 @@ public class E3Main1 {
 				config.put(key.substring(10), (String) e.getValue());
 		}
 		config.put(Constants.FRAMEWORK_STORAGE_CLEAN, "true");
-		// set by EclipseStarter and needed to make some jvm packages visible
-		// at runtime
-		// config.put("osgi.compatibility.bootdelegation.default", "true");
+		/*
+		 * set by EclipseStarter and needed to make some jvm packages (e.g. org.sax.xml,
+		 * javax.xml.parser) visible to plugins that do not import them (e.g. p2)
+		 */
+		config.put(EquinoxConfiguration.PROP_COMPATIBILITY_BOOTDELEGATION, "true");
+
 		// not sure how to handle this
 		// config.put("eclipse.consoleLog", "true");
 
@@ -237,59 +239,16 @@ public class E3Main1 {
 		int exitCode;
 		try {
 
-			boolean launchDefault = true;
-			EquinoxConfiguration equinoxConfig = null;
-			FrameworkLog log = new FrameworkLog() {
+			boolean failOnNoDefault = true;
+			boolean relaunch = false;
 
-				@Override
-				public void log(FrameworkEvent frameworkEvent) {
-					logger.fine("LOG " + frameworkEvent);
-				}
+			ServiceReference<FrameworkLog> logRef = context.getServiceReference(FrameworkLog.class);
+			FrameworkLog log = context.getService(logRef);
+			ServiceReference<EnvironmentInfo> configRef = context.getServiceReference(EnvironmentInfo.class);
+			EquinoxConfiguration equinoxConfig = (EquinoxConfiguration) context.getService(configRef);
 
-				@Override
-				public void log(FrameworkLogEntry logEntry) {
-					logger.fine("LOG " + logEntry);
-
-				}
-
-				@Override
-				public void setWriter(Writer newWriter, boolean append) {
-					new Throwable().printStackTrace();
-					// TODO Auto-generated method stub
-
-				}
-
-				@Override
-				public void setFile(File newFile, boolean append) throws IOException {
-					// TODO Auto-generated method stub
-					new Throwable().printStackTrace();
-
-				}
-
-				@Override
-				public File getFile() {
-					new Throwable().printStackTrace();
-					// TODO Auto-generated method stub
-					return null;
-				}
-
-				@Override
-				public void setConsoleLog(boolean consoleLog) {
-					new Throwable().printStackTrace();
-					// TODO Auto-generated method stub
-
-				}
-
-				@Override
-				public void close() {
-					new Throwable().printStackTrace();
-					// TODO Auto-generated method stub
-
-				}
-
-			};
-
-			EclipseAppLauncher appLauncher = new EclipseAppLauncher(context, false, launchDefault, log, equinoxConfig);
+			EclipseAppLauncher appLauncher = new EclipseAppLauncher(context, relaunch, failOnNoDefault, log,
+					equinoxConfig);
 			ServiceRegistration<?> appLauncherRegistration = context
 					.registerService(ApplicationLauncher.class.getName(), appLauncher, null);
 
