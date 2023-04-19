@@ -101,17 +101,19 @@ public class E3Main1 {
 		// not sure how to handle this
 		// config.put("eclipse.consoleLog", "true");
 
-		Path storage = Files.createTempDirectory("e3");
-		logger.fine("Using temporary storage " + storage);
+		Path tempDir = Files.createTempDirectory("e3-");
+		logger.fine("Using temporary directory " + tempDir);
+		Path storage = tempDir.resolve("configuration");
+		Files.createDirectory(storage);
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run() {
 				try {
-					logger.fine("Deleting temporary storage " + storage);
-					Files.walk(storage).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-					logger.fine("Deleted temporary storage " + storage);
+					logger.fine("Deleting temporary storage " + tempDir);
+					Files.walk(tempDir).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+					logger.fine("Deleted temporary storage " + tempDir);
 				} catch (IOException e) {
-					logger.log(Level.WARNING, "Failed to delete temporary storage " + storage + ": " + e, e);
+					logger.log(Level.WARNING, "Failed to delete temporary directory " + tempDir + ": " + e, e);
 				}
 			}
 		});
