@@ -48,7 +48,7 @@
 		<tycho.version>1.0.0</tycho.version>
 		<tycho.osgi.version>3.11.2.v20161107-1947</tycho.osgi.version>
 		<antlr4.version>4.6</antlr4.version>
-		<maven.version>3.3.9</maven.version>
+		<maven.version>3.8.1</maven.version>
 		<maven.slf4j.version>1.7.5</maven.slf4j.version>
 		<plexus-component-version>1.7.1</plexus-component-version>
 		<groovy.version>2.4.9</groovy.version>
